@@ -1,22 +1,13 @@
-def run_ripplexa(input_data):
+from fastapi import FastAPI
 
-    print("1. Mapping dependencies...")
-
-    print("2. Simulating failure...")
-
-    print("3. Tracing cascade...")
-
-    print("4. Quantifying impact...")
-
-    print("5. Finding recovery strategy...")
-
-    print("6. Generating recommendation...")
+from backend.api.routes import router
 
 
-if __name__ == "__main__":
+app = FastAPI(title="Ripplexa")
 
-    sample_input = {
-        "failed_node": "Supplier_A"
-    }
+app.include_router(router)
 
-    run_ripplexa(sample_input)
+
+@app.get("/")
+def home():
+    return {"message": "Ripplexa is running"}
