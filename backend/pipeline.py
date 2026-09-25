@@ -33,7 +33,6 @@ def run_ripplexa(failed_node):
     # --------------------------------------------------
 
     if not predictor.models_loaded:
-
         predictor.load_models()
 
     ml_result = predictor.predict_node(
@@ -44,9 +43,15 @@ def run_ripplexa(failed_node):
     # 4. Find recovery strategy
     # --------------------------------------------------
 
-    recovery_result = run_recovery(
-        failed_node=failed_node
-    )
+    try:
+        recovery_result = run_recovery(
+            failed_node=failed_node
+        )
+    except ValueError as e:
+        recovery_result = {
+            "error": str(e),
+            "recommended_strategy": None
+        }
 
     # --------------------------------------------------
     # 5. Combine results
