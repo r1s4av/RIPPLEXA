@@ -1,0 +1,6 @@
+source,target
+Supplier A,Factory 1
+Supplier B,Factory 1
+Factory 1,Warehouse 1
+Warehouse 1,Store A
+Warehouse 1,Store B
