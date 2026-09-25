@@ -255,12 +255,12 @@ button:disabled { cursor: not-allowed; opacity: .58; }
 .section-heading-row h2 { font-family: "Space Grotesk", sans-serif; margin: 5px 0 0; }
 
 .network-graph-wrap { width: 100%; overflow-x: auto; }
-.network-graph { width: 100%; min-width: 620px; height: 290px; }
-.graph-edge { stroke: #bdd9d6; stroke-width: 1.4; opacity: .8; }
+.network-graph { width: 100%; min-width: 900px; height: 390px; }
+.graph-edge { stroke: #bdd9d6; stroke-width: 1.7; opacity: .8; }
 .graph-node circle { fill: white; stroke: var(--teal-700); stroke-width: 2; transition: .25s; }
-.graph-node text { font-size: 8px; fill: var(--teal-900); font-weight: 700; }
+.graph-node text { font-size: 10px; fill: var(--teal-900); font-weight: 700; }
 .graph-node:hover circle, .graph-node.active circle { fill: var(--teal-100); r: 21; }
-.graph-label { font-size: 10px; fill: var(--muted); text-transform: capitalize; }
+.graph-label { font-size: 12px; fill: var(--muted); text-transform: capitalize; font-weight: 600; }
 .graph-legend { display: flex; flex-wrap: wrap; gap: 14px; color: var(--muted); font-size: 10px; }
 .legend-dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; margin-right: 5px; background: var(--teal-700); }
 

@@ -550,15 +550,15 @@ function MiniNetworkGraph({ nodes, edges, highlight = [] }) {
   grouped.forEach((group, layer) => {
     group.forEach((node, index) => {
       positions[node.node_id] = {
-        x: 70 + layer * 170,
-        y: 45 + (index + 1) * (190 / (group.length + 1))
+        x: 95 + layer * 240,
+        y: 55 + (index + 1) * (250 / (group.length + 1))
       };
     });
   });
 
   return (
     <div className="network-graph-wrap">
-      <svg className="network-graph" viewBox="0 0 760 260" role="img" aria-label="Supply chain dependency graph">
+      <svg className="network-graph" viewBox="0 0 1040 360" role="img" aria-label="Supply chain dependency graph">
         {edges.filter((e) => positions[e.from_node] && positions[e.to_node]).map((edge, index) => {
           const a = positions[edge.from_node];
           const b = positions[edge.to_node];
@@ -569,14 +569,14 @@ function MiniNetworkGraph({ nodes, edges, highlight = [] }) {
           const active = highlight.includes(id);
           return (
             <g key={id} className={active ? "graph-node active" : "graph-node"}>
-              <circle cx={pos.x} cy={pos.y} r="17" />
+              <circle cx={pos.x} cy={pos.y} r="23" />
               <text x={pos.x} y={pos.y + 4} textAnchor="middle">{id.replace(/[^A-Z0-9]/g, "").slice(-3)}</text>
               <title>{node?.name || id}</title>
             </g>
           );
         })}
         {types.map((type, index) => (
-          <text key={type} x={70 + index * 170} y="245" textAnchor="middle" className="graph-label">
+          <text key={type} x={95 + index * 240} y="340" textAnchor="middle" className="graph-label">
             {type}
           </text>
         ))}
