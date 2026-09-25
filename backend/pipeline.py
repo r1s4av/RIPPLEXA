@@ -1,6 +1,7 @@
 from graph.graph.graph_builder import build_graph as build_dependency_graph
 from graph.graph.failure_simulation import simulate_cascade
 from optimization.recovery import run_recovery
+from ml.predictor import predictor
 
 
 def run_ripplexa(failed_node):
@@ -28,7 +29,19 @@ def run_ripplexa(failed_node):
         }
 
     # --------------------------------------------------
-    # 3. Find recovery strategy
+    # 3. Run ML predictions
+    # --------------------------------------------------
+
+    if not predictor.models_loaded:
+
+        predictor.load_models()
+
+    ml_result = predictor.predict_node(
+        failed_node
+    )
+
+    # --------------------------------------------------
+    # 4. Find recovery strategy
     # --------------------------------------------------
 
     recovery_result = run_recovery(
@@ -36,11 +49,12 @@ def run_ripplexa(failed_node):
     )
 
     # --------------------------------------------------
-    # 4. Combine results
+    # 5. Combine results
     # --------------------------------------------------
 
     return {
         "failed_node": failed_node,
         "cascade": cascade_result,
+        "ml": ml_result,
         "recovery": recovery_result
     }
