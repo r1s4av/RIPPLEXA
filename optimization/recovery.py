@@ -47,9 +47,19 @@ class RecoveryStrategy:
 
     capacity: float
 
+    required_capacity: float
+
     demand: float
 
     disruption: float
+
+    maximum_disruption: float
+
+    capacity_feasible: bool
+
+    disruption_feasible: bool
+
+    feasibility_reasons: List[str]
 
     delay_days: float
 
@@ -359,96 +369,44 @@ def find_alternative_routes(
     graph: nx.DiGraph,
     nodes: pd.DataFrame,
     failed_node: str,
-    target_production: str,
+    target_production: Optional[str] = None,
     target_store: Optional[str] = None,
-    max_routes: int = 20
+    max_routes: Optional[int] = None
 ) -> List[List[str]]:
 
-    # Make a copy so we don't modify the original graph.
     recovery_graph = graph.copy()
-
-    # Remove failed node.
     if failed_node in recovery_graph:
-
-        recovery_graph.remove_node(
-            failed_node
-        )
+        recovery_graph.remove_node(failed_node)
 
     # Find all suppliers.
     suppliers = [
-        node
-        for node in recovery_graph.nodes
-        if get_node_type(
-            nodes,
-            node
-        ) == "supplier"
+        node for node in recovery_graph.nodes
+        if get_node_type(nodes, node) == "supplier"
     ]
-
     routes = []
 
-    # --------------------------------------------------------
-    # CASE 1:
-    # Supplier → ... → Production → Store
-    # --------------------------------------------------------
-
-    if target_store is not None:
-
-        for supplier in suppliers:
-
-            try:
-
-                paths = nx.all_simple_paths(
-                    recovery_graph,
-                    supplier,
-                    target_store,
-                    cutoff=8
-                )
-
-                for path in paths:
-
-                    if target_production in path:
-
-                        routes.append(
-                            path
-                        )
-
-            except nx.NetworkXNoPath:
+    for supplier in suppliers:
+        for warehouse in recovery_graph.successors(supplier):
+            if get_node_type(nodes, warehouse) != "warehouse":
                 continue
 
-            if len(routes) >= max_routes:
-                break
+            for production in recovery_graph.successors(warehouse):
+                if get_node_type(nodes, production) != "production":
+                    continue
+                if target_production and production != target_production:
+                    continue
 
-    # --------------------------------------------------------
-    # CASE 2:
-    # Supplier → ... → Production
-    # --------------------------------------------------------
+                for store in recovery_graph.successors(production):
+                    if get_node_type(nodes, store) != "store":
+                        continue
+                    if target_store and store != target_store:
+                        continue
 
-    else:
+                    routes.append([supplier, warehouse, production, store])
+                    if max_routes is not None and len(routes) >= max_routes:
+                        return routes
 
-        for supplier in suppliers:
-
-            try:
-
-                paths = nx.all_simple_paths(
-                    recovery_graph,
-                    supplier,
-                    target_production,
-                    cutoff=8
-                )
-
-                for path in paths:
-
-                    routes.append(
-                        path
-                    )
-
-            except nx.NetworkXNoPath:
-                continue
-
-            if len(routes) >= max_routes:
-                break
-
-    return routes[:max_routes]
+    return routes
 
 
 # ============================================================
@@ -460,17 +418,17 @@ def calculate_route_metrics(
     graph: nx.DiGraph,
     nodes: pd.DataFrame,
     demand: pd.DataFrame,
-    target_production: str
+    target_production: Optional[str] = None,
+    required_capacity: float = 0.0,
+    disruption_threshold: float = 1.0
 ) -> Dict[str, float]:
 
     # --------------------------------------------------------
     # Demand
     # --------------------------------------------------------
 
-    required_demand = get_average_demand(
-        demand,
-        target_production
-    )
+    production_node = target_production or route[2]
+    average_demand = get_average_demand(demand, production_node)
 
     # --------------------------------------------------------
     # Capacity
@@ -485,8 +443,7 @@ def calculate_route_metrics(
             node
         )
 
-        # Customer has capacity 0 in dataset.
-        if node_type != "customer":
+        if node_type in {"supplier", "warehouse", "production"}:
 
             capacities.append(
                 get_capacity(
@@ -505,10 +462,7 @@ def calculate_route_metrics(
 
         bottleneck_capacity = 0.0
 
-    feasible = (
-        bottleneck_capacity
-        >= required_demand
-    )
+    capacity_feasible = bottleneck_capacity >= required_capacity
 
     # --------------------------------------------------------
     # Reliability
@@ -609,6 +563,20 @@ def calculate_route_metrics(
         * (1.0 - minimum_strength)
     )
 
+    disruption_feasible = disruption <= disruption_threshold
+    feasibility_reasons = [
+        (
+            f"Capacity {bottleneck_capacity:.2f} >= required {required_capacity:.2f}"
+            if capacity_feasible
+            else f"Capacity {bottleneck_capacity:.2f} < required {required_capacity:.2f}"
+        ),
+        (
+            f"Disruption {disruption:.4f} <= maximum {disruption_threshold:.4f}"
+            if disruption_feasible
+            else f"Disruption {disruption:.4f} > maximum {disruption_threshold:.4f}"
+        )
+    ]
+
     # --------------------------------------------------------
     # Recovery cost proxy
     #
@@ -630,10 +598,15 @@ def calculate_route_metrics(
     )
 
     return {
-        "feasible": feasible,
+        "feasible": capacity_feasible and disruption_feasible,
         "capacity": bottleneck_capacity,
-        "demand": required_demand,
+        "required_capacity": required_capacity,
+        "demand": average_demand,
         "disruption": disruption,
+        "maximum_disruption": disruption_threshold,
+        "capacity_feasible": capacity_feasible,
+        "disruption_feasible": disruption_feasible,
+        "feasibility_reasons": feasibility_reasons,
         "delay_days": total_delay,
         "risk": risk,
         "cost": cost
@@ -679,7 +652,9 @@ def create_strategies(
     graph: nx.DiGraph,
     nodes: pd.DataFrame,
     demand: pd.DataFrame,
-    target_production: str
+    target_production: Optional[str] = None,
+    required_capacity: float = 0.0,
+    disruption_threshold: float = 1.0
 ) -> List[RecoveryStrategy]:
 
     if not routes:
@@ -694,7 +669,9 @@ def create_strategies(
             graph,
             nodes,
             demand,
-            target_production
+            target_production,
+            required_capacity,
+            disruption_threshold
         )
 
         metric_list.append(
@@ -766,6 +743,11 @@ def create_strategies(
                 2
             ),
 
+            required_capacity=round(
+                metrics["required_capacity"],
+                2
+            ),
+
             demand=round(
                 metrics["demand"],
                 2
@@ -775,6 +757,17 @@ def create_strategies(
                 metrics["disruption"],
                 4
             ),
+
+            maximum_disruption=round(
+                metrics["maximum_disruption"],
+                4
+            ),
+
+            capacity_feasible=metrics["capacity_feasible"],
+
+            disruption_feasible=metrics["disruption_feasible"],
+
+            feasibility_reasons=metrics["feasibility_reasons"],
 
             delay_days=round(
                 metrics["delay_days"],
@@ -943,9 +936,17 @@ def optimize_strategy(
 def run_recovery(
     failure_id: Optional[str] = None,
     failed_node: Optional[str] = None,
-    target_production: str = "PROD_C",
-    target_store: Optional[str] = "STORE_D"
+    target_production: Optional[str] = None,
+    target_store: Optional[str] = None,
+    required_capacity: float = 100.0,
+    disruption_threshold: float = 0.45
 ):
+
+    if required_capacity < 0:
+        raise ValueError("Required capacity must be zero or greater.")
+
+    if not 0 <= disruption_threshold <= 1:
+        raise ValueError("Disruption threshold must be between 0 and 1.")
 
     # --------------------------------------------------------
     # 1. Load data
@@ -984,7 +985,7 @@ def run_recovery(
     # 4. Validate target
     # --------------------------------------------------------
 
-    if target_production not in graph:
+    if target_production is not None and target_production not in graph:
 
         raise ValueError(
             f"Production node "
@@ -1018,7 +1019,7 @@ def run_recovery(
 
         target_store=target_store,
 
-        max_routes=20
+        max_routes=None
     )
 
     # --------------------------------------------------------
@@ -1035,7 +1036,11 @@ def run_recovery(
 
         demand=demand,
 
-        target_production=target_production
+        target_production=target_production,
+
+        required_capacity=required_capacity,
+
+        disruption_threshold=disruption_threshold
     )
 
     # --------------------------------------------------------
@@ -1086,6 +1091,11 @@ def run_recovery(
             "store":
                 target_store
         },
+
+            "constraints": {
+                "required_capacity": required_capacity,
+                "disruption_threshold": disruption_threshold
+            },
 
         "strategies": [
 

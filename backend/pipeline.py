@@ -4,7 +4,11 @@ from optimization.recovery import run_recovery
 from ml.predictor import predictor
 
 
-def run_ripplexa(failed_node):
+def run_ripplexa(
+    failed_node,
+    required_capacity=100.0,
+    disruption_threshold=0.45
+):
 
     # --------------------------------------------------
     # 1. Build dependency graph
@@ -45,7 +49,9 @@ def run_ripplexa(failed_node):
 
     try:
         recovery_result = run_recovery(
-            failed_node=failed_node
+            failed_node=failed_node,
+            required_capacity=required_capacity,
+            disruption_threshold=disruption_threshold
         )
     except ValueError as e:
         recovery_result = {

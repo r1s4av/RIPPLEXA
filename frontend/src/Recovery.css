@@ -1,0 +1,116 @@
+.field input {
+    width: 100%;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 11px 12px;
+    background: white;
+    color: var(--ink);
+    outline: none;
+}
+
+.field input:focus {
+    border-color: var(--teal-700);
+    box-shadow: 0 0 0 3px rgba(12, 139, 139, .1);
+}
+
+.recovery-constraints,
+.route-results {
+    margin-top: 17px;
+}
+
+.route-evaluations {
+    display: grid;
+    gap: 10px;
+}
+
+.route-evaluation {
+    min-width: 0;
+    border: 1px solid var(--border);
+    border-left: 4px solid var(--red);
+    border-radius: 8px;
+    padding: 14px;
+    background: #fffafa;
+}
+
+.route-evaluation.feasible {
+    border-left-color: var(--green);
+    background: #f8fcfa;
+}
+
+.route-evaluation-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 12px;
+}
+
+.route-evaluation-header strong {
+    overflow-wrap: anywhere;
+    font-size: 12px;
+}
+
+.route-evaluation-header span {
+    flex: 0 0 auto;
+    color: var(--red);
+    font-size: 9px;
+    font-weight: 800;
+}
+
+.route-evaluation.feasible .route-evaluation-header span {
+    color: var(--green);
+}
+
+.route-metrics {
+    display: grid;
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+    gap: 10px;
+    margin-top: 13px;
+}
+
+.route-metrics div {
+    min-width: 0;
+}
+
+.route-metrics small,
+.route-metrics strong {
+    display: block;
+}
+
+.route-metrics small {
+    color: var(--muted);
+    font-size: 9px;
+}
+
+.route-metrics strong {
+    margin-top: 3px;
+    font-size: 11px;
+    overflow-wrap: anywhere;
+}
+
+.route-checks {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px 18px;
+    margin-top: 11px;
+    padding-top: 9px;
+    border-top: 1px solid var(--border);
+}
+
+.route-checks p {
+    margin: 0;
+    font-size: 10px;
+}
+
+.check-pass {
+    color: #187653;
+}
+
+.check-fail {
+    color: #b44c47;
+}
+
+@media (max-width: 760px) {
+    .route-metrics {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+}

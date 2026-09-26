@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
+import "./Recovery.css";
 
 const FILES = {
   demand: "/data/demand_history.csv",
@@ -107,11 +108,15 @@ async function loadAllData() {
   };
 }
 
-async function runBackendSimulation(nodeId) {
+async function runBackendSimulation(nodeId, requiredCapacity = 100, disruptionThreshold = 0.45) {
   const response = await fetch(`${API_URL}/simulate`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ failed_node: nodeId })
+    body: JSON.stringify({
+      failed_node: nodeId,
+      required_capacity: Number(requiredCapacity),
+      disruption_threshold: Number(disruptionThreshold)
+    })
   });
 
   if (!response.ok) throw new Error("Backend simulation failed.");
@@ -1113,6 +1118,8 @@ function findPath(edges, start, target) {
 function Recovery({ data, navigate, showToast, openSimulation }) {
   const [activeFailure, setActiveFailure] = useState(null);
   const [backendRecovery, setBackendRecovery] = useState(null);
+  const [requiredCapacity, setRequiredCapacity] = useState("100");
+  const [disruptionThreshold, setDisruptionThreshold] = useState("45");
   const [loading, setLoading] = useState(false);
 
   const unresolved = [...data.failures].filter((f) => !f.resolved).sort((a, b) => b.impact_score - a.impact_score);
@@ -1123,9 +1130,15 @@ function Recovery({ data, navigate, showToast, openSimulation }) {
 
   async function analyzeRecovery() {
     if (!activeFailure) return;
+    const capacity = Number(requiredCapacity);
+    const maximumDisruption = Number(disruptionThreshold);
+    if (requiredCapacity.trim() === "" || disruptionThreshold.trim() === "" || !Number.isFinite(capacity) || capacity < 0 || !Number.isFinite(maximumDisruption) || maximumDisruption < 0 || maximumDisruption > 100) {
+      showToast("Enter a non-negative capacity and disruption from 0 to 100%.");
+      return;
+    }
     setLoading(true);
     try {
-      const result = await runBackendSimulation(activeFailure.node_id);
+      const result = await runBackendSimulation(activeFailure.node_id, capacity, maximumDisruption / 100);
       setBackendRecovery(result.recovery);
       showToast("Recovery analysis updated.");
     } catch (error) {
@@ -1166,41 +1179,71 @@ function Recovery({ data, navigate, showToast, openSimulation }) {
         </div>
       </section>
 
+      <section className="card recovery-constraints">
+        <SectionHeader title="Recovery constraints" description="These limits evaluate routes; they do not modify node capacities in the dataset." />
+        <div className="form-grid">
+          <label className="field">
+            Required route capacity
+            <input type="number" min="0" step="1" value={requiredCapacity} onChange={(event) => setRequiredCapacity(event.target.value)} />
+          </label>
+          <label className="field">
+            Maximum disruption (%)
+            <input type="number" min="0" max="100" step="1" value={disruptionThreshold} onChange={(event) => setDisruptionThreshold(event.target.value)} />
+          </label>
+        </div>
+      </section>
+
       {backendRecovery ? (
         <>
           <div className="two-column">
-            <section className="card">
-              <SectionHeader title="Recovery strategies" description={`${strategies.length} strategies returned by the optimizer.`} />
-              <div className="strategy-list">
-                {strategies.map((strategy, index) => (
-                  <div className={`strategy-row ${strategy.feasible ? "feasible" : "blocked"}`} key={index}>
-                    <div><strong>{strategy.name || strategy.strategy || `Strategy ${index + 1}`}</strong><small>{strategy.feasible ? "Feasible" : "Blocked by constraints"}</small></div>
-                    <span>{strategy.cost ?? "—"}</span>
-                    <span>{strategy.delay ?? "—"}</span>
-                    <span>{strategy.disruption ?? "—"}</span>
-                  </div>
-                ))}
-              </div>
-            </section>
-
             <section className="card recommended-card">
               <div className="recommendation-icon">✦</div>
               <div className="eyebrow">OPTIMIZER DECISION</div>
               {recommended ? (
                 <>
                   <h2>{recommended.name || recommended.strategy || "Recommended strategy"}</h2>
-                  <p>The optimizer selected a feasible option for the active failure.</p>
+                  <p>Selected by {backendRecovery.optimizer} from {strategies.filter((strategy) => strategy.feasible).length} feasible routes.</p>
                   <button className="primary-button" onClick={() => showToast("Recovery plan marked for review.")}>Review recovery plan</button>
                 </>
               ) : (
                 <>
                   <h2>No feasible strategy</h2>
-                  <p>All available strategies are blocked under the current capacity and demand constraints.</p>
+                  <p>Every evaluated route exceeds the capacity requirement or disruption limit.</p>
                   <button className="secondary-button" onClick={() => openSimulation(activeFailure?.node_id || "")}>Inspect disruption →</button>
                 </>
               )}
             </section>
           </div>
+
+          <section className="card route-results">
+            <SectionHeader title="Route feasibility" description={`${strategies.length} valid routes evaluated after removing ${activeFailure.node_id}.`} />
+            <div className="route-evaluations">
+              {strategies.map((strategy, index) => (
+                <article className={`route-evaluation ${strategy.feasible ? "feasible" : "blocked"}`} key={`${strategy.route.join("-")}-${index}`}>
+                  <div className="route-evaluation-header">
+                    <strong>{strategy.route.join(" → ")}</strong>
+                    <span>{strategy.feasible ? "FEASIBLE" : "NOT FEASIBLE"}</span>
+                  </div>
+                  <div className="route-metrics">
+                    <div><small>Route capacity</small><strong>{formatNumber(strategy.capacity)}</strong></div>
+                    <div><small>Required capacity</small><strong>{formatNumber(strategy.required_capacity)}</strong></div>
+                    <div><small>Disruption</small><strong>{percentage(strategy.disruption * 100)}</strong></div>
+                    <div><small>Maximum allowed</small><strong>{percentage(strategy.maximum_disruption * 100)}</strong></div>
+                    <div><small>Delay</small><strong>{formatNumber(strategy.delay_days)} days</strong></div>
+                    <div><small>Risk</small><strong>{percentage(strategy.risk * 100)}</strong></div>
+                  </div>
+                  <div className="route-checks">
+                    <p className={strategy.capacity_feasible ? "check-pass" : "check-fail"}>
+                      {strategy.capacity_feasible ? "✓" : "×"} Capacity {formatNumber(strategy.capacity)} {strategy.capacity_feasible ? "≥" : "<"} {formatNumber(strategy.required_capacity)}
+                    </p>
+                    <p className={strategy.disruption_feasible ? "check-pass" : "check-fail"}>
+                      {strategy.disruption_feasible ? "✓" : "×"} Disruption {percentage(strategy.disruption * 100)} {strategy.disruption_feasible ? "≤" : ">"} {percentage(strategy.maximum_disruption * 100)}
+                    </p>
+                  </div>
+                </article>
+              ))}
+            </div>
+          </section>
 
           <section className="card chart-card">
             <SectionHeader title="Strategy comparison" description="Relative cost, delay and disruption returned by the optimizer." />

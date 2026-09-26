@@ -113,6 +113,55 @@ def test_recovery_routes_bypass_failed_node():
         assert "STORE_D" in route
 
 
+def test_recovery_enumerates_all_stage_routes_and_applies_constraints():
+
+    nodes, edges, demand, failures = load_data()
+    graph = build_graph(edges)
+    routes = find_alternative_routes(
+        graph=graph,
+        nodes=nodes,
+        failed_node="WH_B"
+    )
+
+    node_types = nodes.set_index("node_id")["type"].to_dict()
+    assert len(routes) > 20
+    assert len({route[2] for route in routes}) > 1
+    assert len({route[3] for route in routes}) > 1
+    for route in routes:
+        assert len(route) == 4
+        assert "WH_B" not in route
+        assert [node_types[node] for node in route] == [
+            "supplier", "warehouse", "production", "store"
+        ]
+
+    strategies = create_strategies(
+        routes=routes,
+        graph=graph,
+        nodes=nodes,
+        demand=demand,
+        required_capacity=100,
+        disruption_threshold=0.45
+    )
+    assert all(strategy.required_capacity == 100 for strategy in strategies)
+    assert all(
+        strategy.feasible == (
+            strategy.capacity >= 100
+            and strategy.disruption <= 0.45
+        )
+        for strategy in strategies
+    )
+    example_strategy = next(
+        strategy for strategy in strategies
+        if strategy.route == ["SUP_B", "WH_A", "PROD_C", "STORE_D"]
+    )
+    assert example_strategy.capacity == 112
+    assert example_strategy.feasible is True
+    selected, optimizer = optimize_strategy(strategies)
+    assert selected is not None
+    assert selected.feasible is True
+    assert optimizer in ["Google OR-Tools", "Fallback"]
+
+
 def test_routes_use_real_edges():
 
     nodes, edges, demand, failures = load_data()
@@ -345,6 +394,9 @@ def test_complete_recovery():
     assert len(
         result["strategies"]
     ) > 0
+
+    assert result["constraints"]["required_capacity"] == 100.0
+    assert result["constraints"]["disruption_threshold"] == 0.45
 
     for strategy in result["strategies"]:
 
